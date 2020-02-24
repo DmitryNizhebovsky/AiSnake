@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Snake</title>
+		<style type="text/css">
+		body {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background-color: #432D7B;
+		}
+		</style>
+	</head>
+	<body>
+		<canvas width="600" height="600" id="canvas"></canvas>
+	</body>
+
+	<script type="text/javascript">
+		let canvas     = document.getElementById("canvas");
+		let canvasRect = canvas.getBoundingClientRect();
+		let context2D  = canvas.getContext("2d");
+
+		let sizeArea = {x: 30, y: 30};
+		let sizeCell = 16;
+		let spaceBetweenCells = 2;
+		let snakeSpeed = 10;
+		let speedUp = false;
+		let prevTime = 0;
+		let snake = [{x: 5, y: 4}, {x: 5, y: 3}, {x: 5, y: 2}, {x: 5, y: 1}];
+		let displayScore = 0;
+		let displaySpeed = 1;
+		let food = {x: 0, y: 0};
+		let direct = {x: 0, y: 1};
+		let isGameOver = false;
+		let path = null;
+
+		function checkPoint(point) {
+			if (point.x >= sizeArea.x) point.x = 0;
+			if (point.y >= sizeArea.y) point.y = 0;
+			if (point.x < 0) point.x = sizeArea.x - 1;
+			if (point.y < 0) point.y = sizeArea.y - 1;
+
+			return {x: point.x, y: point.y};
+		}
+
+		function addNeighbor(array, point) {
+			let newPoint = checkPoint(point);
+			if (!isContains(snake, newPoint)) {
+				array.push({x: newPoint.x, y: newPoint.y, p: point.p});
+			}
+		}
+
+		function getNeighbors(point) {
+			let neighbors = new Array();
+
+			addNeighbor(neighbors, {x: point.x - 0, y: point.y + 1, p: point});
+			addNeighbor(neighbors, {x: point.x - 1, y: point.y + 0, p: point});
+			addNeighbor(neighbors, {x: point.x + 1, y: point.y - 0, p: point});
+			addNeighbor(neighbors, {x: point.x + 0, y: point.y - 1, p: point});
+
+			return neighbors;
+		}
+
+		function pathToArray(path) {
+			let pathArray = new Array();
+			pathArray.unshift({x: path.x, y: path.y});
+			let point = path.p;
+
+			do {
+				pathArray.unshift({x: point.x, y: point.y});
+				point = point.p;
+			} while(point != null);
+
+			return pathArray;
+		}
+
+		function findPath(startPoint, endPoint) {
+			let visitedNodes = new Array();
+			let queueNodes = new Array();
+			visitedNodes.push(startPoint);
+			queueNodes.push(startPoint);
+
+			while(queueNodes.length > 0) {
+				let point = queueNodes.shift();
+				neighbors = getNeighbors(point);
+
+				for(let i = 0; i < neighbors.length; ++i) {
+					let neighbor = neighbors[i];
+
+					if(neighbor.x === endPoint.x && neighbor.y === endPoint.y) {
+						return pathToArray(neighbor);
+					}
+
+					if(!isContains(visitedNodes, neighbor)) {
+						queueNodes.push(neighbor);
+						visitedNodes.push(neighbor);
+					}
+				}
+			}
+
+			return null;
+		}
+
+		function getNextSnakePosition() {
+			let head = snake[0];
+			let newPos = {x: head.x + direct.x, y: head.y + direct.y};
+			return checkPoint(newPos);
+		}
+
+		function getDirection(to, from) {
+			let newDirection = {};
+
+			if(to.x === 0 && from.x === sizeArea.x - 1) {
+				newDirection = {x: 1, y: 0};
+			} else if(to.x === sizeArea.x - 1 && from.x === 0) {
+				newDirection = {x: -1, y: 0};
+			} else if(to.y === 0 && from.y === sizeArea.y - 1) {
+				newDirection = {x: 0, y: 1};
+			} else if(to.y === sizeArea.y - 1 && from.y === 0) {
+				newDirection = {x: 0, y: -1};
+			} else {
+				newDirection = {x: to.x - from.x, y: to.y - from.y};
+			}
+
+			return newDirection;
+		}
+
+		function AISnake() {
+			let head = snake[0];
+			path = findPath({x: head.x, y: head.y}, {x: food.x, y: food.y});
+
+			if(path != null && path.length > 1) {
+				direct = getDirection(path[1], head);
+			} else {
+				let neighbors = getNeighbors(snake[0]);
+
+				if (neighbors.length) {
+					direct = getDirection(neighbors[0], head);
+				}
+			}
+		}
+
+		function moveSnake() {
+			AISnake();
+
+			if(!intersectSnakeAndFood()) {
+				snake.pop();
+			}
+
+			snake.unshift(getNextSnakePosition());
+			isGameOver = isSelfCollision();
+		}
+
+		function intersectSnakeAndFood() {
+			let head = snake[0];
+
+			if (head.x === food.x && head.y === food.y) {
+				foodGenerate();
+				speedUp = true;
+				displayScore += 1;
+				return true;
+			}
+
+			return false;
+		}
+
+		function isSelfCollision() {
+			let head = snake[0];
+			return isContains(snake, head, 1);
+		}
+
+		function update() {
+			if(isGameOver)
+				return;
+
+			let time = new Date().getTime();
+			if (time - prevTime >= 1000 / snakeSpeed) {
+				prevTime = time;
+
+				if(displayScore !== 0 && displayScore % 10 === 0 && speedUp) {
+					snakeSpeed += 0.5;
+					displaySpeed += 0.5;
+					speedUp = false;
+				}
+
+				moveSnake();
+			}
+		}
+
+		function randInt(min, max) {
+			return Math.round(min - 0.5 + Math.random() * (max - min));
+		}
+
+		function isContains(array, point, offset = 0) {
+			for(let i = offset; i < array.length; ++i) {
+				if(array[i].x === point.x && array[i].y === point.y) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		function foodGenerate() {
+			let cellList = [];
+
+			for(let x = 0; x < sizeArea.x; ++x) {
+				for(let y = 0; y < sizeArea.y; ++y) {
+					if(!isContains(snake, {x: x, y: y})) {
+						cellList.push({x: x, y: y});
+					}
+				}
+			}
+
+			food = cellList[randInt(0, cellList.length)];
+		}
+
+		function drawTile(x, y, color) {
+			context2D.fillStyle = color;
+			let posX = sizeCell * x + spaceBetweenCells * x;
+			let posY = sizeCell * y + spaceBetweenCells * y;
+			context2D.fillRect(posX, posY, sizeCell, sizeCell);
+		}
+
+		function draw() {
+			context2D.clearRect(0, 0, canvasRect.width, canvasRect.height);
+
+			for(let x = 0; x < sizeArea.x; ++x) {
+				for(let y = 0; y < sizeArea.y; ++y) {
+					drawTile(x, y, "#449187");
+				}
+			}
+
+			if(path) {
+				for(let item = 0; item < path.length; ++item) {
+					drawTile(path[item].x, path[item].y, "#FFF375");
+				}			
+			}
+
+			drawTile(food.x, food.y, "#F85ACB");
+
+			for(let item = 0; item < snake.length; ++item) {
+				let cellX = Math.floor(snake[item].x);
+				let cellY = Math.floor(snake[item].y);
+				drawTile(cellX, cellY, "#B4E55E");
+			}
+
+			context2D.font         = "30px Arial";
+			context2D.fillStyle    = "#FE8A98";
+			context2D.textAlign    = "left";
+			context2D.textBaseline = "bottom";
+
+			let text = "Score: " + displayScore;
+			let textX = 0;
+			let textY = sizeCell * sizeArea.y + spaceBetweenCells * sizeArea.y + 50;
+			context2D.fillText(text, textX, textY);
+
+			textX = 400;
+			text = "Speed: " + displaySpeed;
+			context2D.fillText(text, textX, textY);
+
+			if(isGameOver) {
+				context2D.font = "60px Arial";
+				context2D.fillStyle = "#FF0000";
+				context2D.textAlign = "center";
+				context2D.textBaseline = "middle";
+				let text = "Game Over";
+				let posX = sizeArea.x * sizeCell + spaceBetweenCells * (sizeArea.x + 1);
+				let posY = sizeArea.y * sizeCell + spaceBetweenCells * (sizeArea.y + 1);
+				context2D.fillText(text, posX / 2, posY / 2);
+			}
+		}
+
+		function run() {
+			update();
+			draw();
+			requestAnimationFrame(run);
+		}
+
+		function onKeyDown(event) {
+			if (event.keyCode == '32') {
+				isGameOver = false;
+				snake = [{x: 5, y: 4}, {x: 5, y: 3}, {x: 5, y: 2}, {x: 5, y: 1}];
+				snakeSpeed = 10;
+				displayScore = 0;
+				displaySpeed = 1;
+				direct = {x: 0, y: 1};
+				foodGenerate();
+			}
+		}
+
+		window.addEventListener("keydown", onKeyDown, false);
+		window.onload = function() {
+			foodGenerate();
+			run();
+  		};
+
+	</script>
+</html>
